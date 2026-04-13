@@ -1,117 +1,163 @@
-const express = require("express")
-const mongoose = require("mongoose")
-const cors = require("cors")
-require("dotenv").config()
+"use client"
 
-const app = express()
+import { useEffect, useState } from "react"
+import axios from "axios"
 
-app.use(cors())
-app.use(express.json())
+export default function AdminPage() {
 
-// ✅ MONGODB CONNECT
-mongoose.connect(process.env.MONGO_URI)
-  .then(() => console.log("MongoDB Connected ✅"))
-  .catch(err => console.log(err))
+  const [orders, setOrders] = useState<any[]>([])
+  const [stats, setStats] = useState({
+    totalOrders: 0,
+    totalRevenue: 0,
+    avgOrderValue: 0
+  })
+  const [open, setOpen] = useState(true)
 
-// ✅ ORDER SCHEMA
-const OrderSchema = new mongoose.Schema({
-  name: String,
-  phone: String,
-  address: String,
-  items: Array,
-  total: Number,
-  status: {
-    type: String,
-    default: "Pending"
+  // FETCH
+  const fetchOrders = async () => {
+    const res = await axios.get("https://backend-api-i2oh.onrender.com/api/orders")
+    setOrders(res.data)
   }
-})
 
-const Order = mongoose.model("Order", OrderSchema)
-
-
-// ==========================
-// ✅ CREATE ORDER
-// ==========================
-app.post("/api/orders/create", async (req, res) => {
-  try {
-    const order = new Order(req.body)
-    await order.save()
-    res.json({ success: true })
-  } catch (err) {
-    res.status(500).json({ error: "Failed to create order" })
+  const fetchDashboard = async () => {
+    const res = await axios.get("https://backend-api-i2oh.onrender.com/api/dashboard")
+    setStats(res.data)
   }
-})
 
+  useEffect(() => {
+    fetchOrders()
+    fetchDashboard()
+  }, [])
 
-// ==========================
-// ✅ GET ALL ORDERS
-// ==========================
-app.get("/api/orders", async (req, res) => {
-  const orders = await Order.find().sort({ _id: -1 })
-  res.json(orders)
-})
-
-
-// ==========================
-// ✅ UPDATE ORDER STATUS (FIXED)
-// ==========================
-app.put("/api/orders/:id", async (req, res) => {
-  try {
-    const { status } = req.body
-
-    const updatedOrder = await Order.findByIdAndUpdate(
-      req.params.id,
-      { status: status },
-      { new: true }
-    )
-
-    res.json(updatedOrder)
-  } catch (err) {
-    res.status(500).json({ error: "Failed to update order" })
+  const deleteOrder = async (id: string) => {
+    await axios.delete(`https://backend-api-i2oh.onrender.com/api/orders/${id}`)
+    fetchOrders()
+    fetchDashboard()
   }
-})
 
-
-// ==========================
-// ✅ DELETE ORDER
-// ==========================
-app.delete("/api/orders/:id", async (req, res) => {
-  try {
-    await Order.findByIdAndDelete(req.params.id)
-    res.json({ success: true })
-  } catch (err) {
-    res.status(500).json({ error: "Delete failed" })
+  const updateStatus = async (id: string) => {
+    await axios.put(`https://backend-api-i2oh.onrender.com/api/orders/${id}`, { status: "Delivered" })
+    fetchOrders()
   }
-})
+
+  return (
+    <div style={{ display: "flex", minHeight: "100vh", background: "#0d0d0d", color: "#fff" }}>
+
+      {/* SIDEBAR */}
+      <div style={{
+        width: open ? "240px" : "70px",
+        background: "#111",
+        padding: "20px",
+        transition: "0.3s"
+      }}>
+        <h2>⚡</h2>
+
+        <div style={{ marginTop: "30px" }}>
+          <p>📊 Dashboard</p>
+          <p>📦 Orders</p>
+          <p>🛒 Products</p>
+          <p>👤 Users</p>
+        </div>
+      </div>
+
+      {/* MAIN */}
+      <div style={{ flex: 1, padding: "20px" }}>
+
+        {/* TOP BAR */}
+        <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "30px" }}>
+
+          <button onClick={() => setOpen(!open)} style={{
+            fontSize: "22px",
+            background: "transparent",
+            color: "#fff",
+            border: "none"
+          }}>
+            ☰
+          </button>
+
+          <button style={{
+            background: "linear-gradient(45deg,#00c853,#64dd17)",
+            padding: "10px 20px",
+            borderRadius: "10px",
+            border: "none",
+            color: "#fff"
+          }}>
+            + Add Product
+          </button>
+        </div>
+
+        {/* CARDS */}
+        <div style={{ display: "flex", gap: "20px", marginBottom: "30px" }}>
+
+          <div style={cardStyle}>
+            <h3>Orders</h3>
+            <h1>{stats.totalOrders}</h1>
+          </div>
+
+          <div style={cardStyle}>
+            <h3>Revenue</h3>
+            <h1>₹{stats.totalRevenue}</h1>
+          </div>
+
+          <div style={cardStyle}>
+            <h3>Avg</h3>
+            <h1>₹{Math.round(stats.avgOrderValue)}</h1>
+          </div>
+
+        </div>
+
+        {/* ORDERS */}
+        {orders.map((order) => (
+          <div key={order._id} style={orderStyle}>
+            <p>{order.name} - ₹{order.total}</p>
+
+            <div>
+              <button onClick={() => updateStatus(order._id)} style={greenBtn}>
+                Delivered
+              </button>
+
+              <button onClick={() => deleteOrder(order._id)} style={redBtn}>
+                Delete
+              </button>
+            </div>
+          </div>
+        ))}
+
+      </div>
+    </div>
+  )
+}
 
 
-// ==========================
-// ✅ DASHBOARD API
-// ==========================
-app.get("/api/dashboard", async (req, res) => {
-  try {
-    const orders = await Order.find()
+// 🔥 STYLES
+const cardStyle = {
+  flex: 1,
+  padding: "20px",
+  borderRadius: "15px",
+  background: "rgba(255,255,255,0.05)",
+  backdropFilter: "blur(10px)"
+}
 
-    const totalOrders = orders.length
-    const totalRevenue = orders.reduce((sum, o) => sum + o.total, 0)
-    const avgOrderValue = totalOrders ? totalRevenue / totalOrders : 0
+const orderStyle = {
+  background: "#1a1a1a",
+  padding: "15px",
+  marginBottom: "10px",
+  borderRadius: "10px",
+  display: "flex",
+  justifyContent: "space-between"
+}
 
-    res.json({
-      totalOrders,
-      totalRevenue,
-      avgOrderValue
-    })
-  } catch (err) {
-    res.status(500).json({ error: "Dashboard error" })
-  }
-})
+const greenBtn = {
+  background: "#00c853",
+  border: "none",
+  padding: "8px",
+  color: "#fff",
+  marginRight: "10px"
+}
 
-
-// ==========================
-// ✅ START SERVER
-// ==========================
-const PORT = process.env.PORT || 5000
-
-app.listen(PORT, () => {
-  console.log(`Server running on ${PORT} 🚀`)
-})
+const redBtn = {
+  background: "#d50000",
+  border: "none",
+  padding: "8px",
+  color: "#fff"
+}
