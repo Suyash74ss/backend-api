@@ -1,163 +1,128 @@
-"use client"
+const express = require("express")
+const mongoose = require("mongoose")
+const cors = require("cors")
+require("dotenv").config()
 
-import { useEffect, useState } from "react"
-import axios from "axios"
+const app = express()
 
-export default function AdminPage() {
+app.use(cors())
+app.use(express.json())
 
-  const [orders, setOrders] = useState<any[]>([])
-  const [stats, setStats] = useState({
-    totalOrders: 0,
-    totalRevenue: 0,
-    avgOrderValue: 0
+// ================= CONNECT DB =================
+mongoose.connect(process.env.MONGO_URI)
+  .then(() => console.log("MongoDB Connected ✅"))
+  .catch(err => console.log(err))
+
+// ================= ORDER MODEL =================
+const OrderSchema = new mongoose.Schema({
+  name: String,
+  phone: String,
+  address: String,
+  items: Array,
+  total: Number,
+  status: {
+    type: String,
+    default: "Pending"
+  }
+})
+
+const Order = mongoose.model("Order", OrderSchema)
+
+
+// ================= PRODUCT MODEL =================
+const ProductSchema = new mongoose.Schema({
+  title: String,
+  price: Number,
+  image: String,
+  description: String
+})
+
+const Product = mongoose.model("Product", ProductSchema)
+
+
+// ================= CREATE ORDER =================
+app.post("/api/orders/create", async (req, res) => {
+  try {
+    const order = new Order(req.body)
+    await order.save()
+    res.json({ success: true })
+  } catch {
+    res.status(500).json({ error: "Create failed" })
+  }
+})
+
+
+// ================= GET ORDERS =================
+app.get("/api/orders", async (req, res) => {
+  const orders = await Order.find().sort({ _id: -1 })
+  res.json(orders)
+})
+
+
+// ================= UPDATE ORDER =================
+app.put("/api/orders/:id", async (req, res) => {
+  try {
+    const updated = await Order.findByIdAndUpdate(
+      req.params.id,
+      { status: req.body.status },
+      { new: true }
+    )
+    res.json(updated)
+  } catch {
+    res.status(500).json({ error: "Update failed" })
+  }
+})
+
+
+// ================= DELETE ORDER =================
+app.delete("/api/orders/:id", async (req, res) => {
+  try {
+    await Order.findByIdAndDelete(req.params.id)
+    res.json({ success: true })
+  } catch {
+    res.status(500).json({ error: "Delete failed" })
+  }
+})
+
+
+// ================= DASHBOARD =================
+app.get("/api/dashboard", async (req, res) => {
+  const orders = await Order.find()
+
+  const totalOrders = orders.length
+  const totalRevenue = orders.reduce((sum, o) => sum + o.total, 0)
+  const avgOrderValue = totalOrders ? totalRevenue / totalOrders : 0
+
+  res.json({
+    totalOrders,
+    totalRevenue,
+    avgOrderValue
   })
-  const [open, setOpen] = useState(true)
+})
 
-  // FETCH
-  const fetchOrders = async () => {
-    const res = await axios.get("https://backend-api-i2oh.onrender.com/api/orders")
-    setOrders(res.data)
+
+// ================= ADD PRODUCT =================
+app.post("/api/products", async (req, res) => {
+  try {
+    const product = new Product(req.body)
+    await product.save()
+    res.json({ success: true })
+  } catch {
+    res.status(500).json({ error: "Product add failed" })
   }
-
-  const fetchDashboard = async () => {
-    const res = await axios.get("https://backend-api-i2oh.onrender.com/api/dashboard")
-    setStats(res.data)
-  }
-
-  useEffect(() => {
-    fetchOrders()
-    fetchDashboard()
-  }, [])
-
-  const deleteOrder = async (id: string) => {
-    await axios.delete(`https://backend-api-i2oh.onrender.com/api/orders/${id}`)
-    fetchOrders()
-    fetchDashboard()
-  }
-
-  const updateStatus = async (id: string) => {
-    await axios.put(`https://backend-api-i2oh.onrender.com/api/orders/${id}`, { status: "Delivered" })
-    fetchOrders()
-  }
-
-  return (
-    <div style={{ display: "flex", minHeight: "100vh", background: "#0d0d0d", color: "#fff" }}>
-
-      {/* SIDEBAR */}
-      <div style={{
-        width: open ? "240px" : "70px",
-        background: "#111",
-        padding: "20px",
-        transition: "0.3s"
-      }}>
-        <h2>⚡</h2>
-
-        <div style={{ marginTop: "30px" }}>
-          <p>📊 Dashboard</p>
-          <p>📦 Orders</p>
-          <p>🛒 Products</p>
-          <p>👤 Users</p>
-        </div>
-      </div>
-
-      {/* MAIN */}
-      <div style={{ flex: 1, padding: "20px" }}>
-
-        {/* TOP BAR */}
-        <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "30px" }}>
-
-          <button onClick={() => setOpen(!open)} style={{
-            fontSize: "22px",
-            background: "transparent",
-            color: "#fff",
-            border: "none"
-          }}>
-            ☰
-          </button>
-
-          <button style={{
-            background: "linear-gradient(45deg,#00c853,#64dd17)",
-            padding: "10px 20px",
-            borderRadius: "10px",
-            border: "none",
-            color: "#fff"
-          }}>
-            + Add Product
-          </button>
-        </div>
-
-        {/* CARDS */}
-        <div style={{ display: "flex", gap: "20px", marginBottom: "30px" }}>
-
-          <div style={cardStyle}>
-            <h3>Orders</h3>
-            <h1>{stats.totalOrders}</h1>
-          </div>
-
-          <div style={cardStyle}>
-            <h3>Revenue</h3>
-            <h1>₹{stats.totalRevenue}</h1>
-          </div>
-
-          <div style={cardStyle}>
-            <h3>Avg</h3>
-            <h1>₹{Math.round(stats.avgOrderValue)}</h1>
-          </div>
-
-        </div>
-
-        {/* ORDERS */}
-        {orders.map((order) => (
-          <div key={order._id} style={orderStyle}>
-            <p>{order.name} - ₹{order.total}</p>
-
-            <div>
-              <button onClick={() => updateStatus(order._id)} style={greenBtn}>
-                Delivered
-              </button>
-
-              <button onClick={() => deleteOrder(order._id)} style={redBtn}>
-                Delete
-              </button>
-            </div>
-          </div>
-        ))}
-
-      </div>
-    </div>
-  )
-}
+})
 
 
-// 🔥 STYLES
-const cardStyle = {
-  flex: 1,
-  padding: "20px",
-  borderRadius: "15px",
-  background: "rgba(255,255,255,0.05)",
-  backdropFilter: "blur(10px)"
-}
+// ================= GET PRODUCTS =================
+app.get("/api/products", async (req, res) => {
+  const products = await Product.find().sort({ _id: -1 })
+  res.json(products)
+})
 
-const orderStyle = {
-  background: "#1a1a1a",
-  padding: "15px",
-  marginBottom: "10px",
-  borderRadius: "10px",
-  display: "flex",
-  justifyContent: "space-between"
-}
 
-const greenBtn = {
-  background: "#00c853",
-  border: "none",
-  padding: "8px",
-  color: "#fff",
-  marginRight: "10px"
-}
+// ================= START SERVER =================
+const PORT = process.env.PORT || 5000
 
-const redBtn = {
-  background: "#d50000",
-  border: "none",
-  padding: "8px",
-  color: "#fff"
-}
+app.listen(PORT, () => {
+  console.log(`Server running on ${PORT} 🚀`)
+})
