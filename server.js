@@ -1,71 +1,117 @@
-require("dotenv").config();
+const express = require("express")
+const mongoose = require("mongoose")
+const cors = require("cors")
+require("dotenv").config()
 
-const express = require("express");
-const mongoose = require("mongoose");
-const cors = require("cors");
+const app = express()
 
-const app = express();
+app.use(cors())
+app.use(express.json())
 
-// Middleware
-app.use(cors());
-app.use(express.json());
-
-// 🔥 MongoDB Connection
+// ✅ MONGODB CONNECT
 mongoose.connect(process.env.MONGO_URI)
   .then(() => console.log("MongoDB Connected ✅"))
-  .catch(err => console.log("Mongo Error ❌:", err));
+  .catch(err => console.log(err))
 
-// ✅ Test route
-app.get("/", (req, res) => {
-  res.send("Backend Running 🚀");
-});
-
-// ✅ Order Schema
+// ✅ ORDER SCHEMA
 const OrderSchema = new mongoose.Schema({
   name: String,
   phone: String,
   address: String,
   items: Array,
-  total: Number
-});
+  total: Number,
+  status: {
+    type: String,
+    default: "Pending"
+  }
+})
 
-const Order = mongoose.model("Order", OrderSchema);
+const Order = mongoose.model("Order", OrderSchema)
 
-// ✅ Create Order API
+
+// ==========================
+// ✅ CREATE ORDER
+// ==========================
 app.post("/api/orders/create", async (req, res) => {
   try {
-    const order = new Order(req.body);
-    await order.save();
-
-    res.json({ success: true, message: "Order saved" });
+    const order = new Order(req.body)
+    await order.save()
+    res.json({ success: true })
   } catch (err) {
-    console.log(err);
-    res.status(500).json({ error: "Order failed" });
+    res.status(500).json({ error: "Failed to create order" })
   }
-});
+})
 
-// ✅ Get All Orders API
+
+// ==========================
+// ✅ GET ALL ORDERS
+// ==========================
 app.get("/api/orders", async (req, res) => {
+  const orders = await Order.find().sort({ _id: -1 })
+  res.json(orders)
+})
+
+
+// ==========================
+// ✅ UPDATE ORDER STATUS (FIXED)
+// ==========================
+app.put("/api/orders/:id", async (req, res) => {
   try {
-    const orders = await Order.find().sort({ _id: -1 });
-    res.json(orders);
+    const { status } = req.body
+
+    const updatedOrder = await Order.findByIdAndUpdate(
+      req.params.id,
+      { status: status },
+      { new: true }
+    )
+
+    res.json(updatedOrder)
   } catch (err) {
-    console.log(err);
-    res.status(500).json({ error: "Failed to fetch orders" });
+    res.status(500).json({ error: "Failed to update order" })
   }
-});
+})
 
-// 🚀 Start server
-app.listen(5000, () => {
-  console.log("Server running on 5000 🚀");
-});
 
-// ❌ Delete Order
+// ==========================
+// ✅ DELETE ORDER
+// ==========================
 app.delete("/api/orders/:id", async (req, res) => {
   try {
-    await Order.findByIdAndDelete(req.params.id);
-    res.json({ success: true });
+    await Order.findByIdAndDelete(req.params.id)
+    res.json({ success: true })
   } catch (err) {
-    res.status(500).json({ error: "Delete failed" });
+    res.status(500).json({ error: "Delete failed" })
   }
-});
+})
+
+
+// ==========================
+// ✅ DASHBOARD API
+// ==========================
+app.get("/api/dashboard", async (req, res) => {
+  try {
+    const orders = await Order.find()
+
+    const totalOrders = orders.length
+    const totalRevenue = orders.reduce((sum, o) => sum + o.total, 0)
+    const avgOrderValue = totalOrders ? totalRevenue / totalOrders : 0
+
+    res.json({
+      totalOrders,
+      totalRevenue,
+      avgOrderValue
+    })
+  } catch (err) {
+    res.status(500).json({ error: "Dashboard error" })
+  }
+})
+
+
+// ==========================
+// ✅ START SERVER
+// ==========================
+const PORT = process.env.PORT || 5000
+
+app.listen(PORT, () => {
+  console.log(`Server running on ${PORT} 🚀`)
+})
