@@ -87,17 +87,21 @@ app.delete("/api/orders/:id", async (req, res) => {
 
 // ================= DASHBOARD =================
 app.get("/api/dashboard", async (req, res) => {
-  const orders = await Order.find()
+  try {
+    const orders = await Order.find()
 
-  const totalOrders = orders.length
-  const totalRevenue = orders.reduce((sum, o) => sum + o.total, 0)
-  const avgOrderValue = totalOrders ? totalRevenue / totalOrders : 0
+    const totalOrders = orders.length
+    const totalRevenue = orders.reduce((sum, o) => sum + o.total, 0)
+    const avgOrderValue = totalOrders ? totalRevenue / totalOrders : 0
 
-  res.json({
-    totalOrders,
-    totalRevenue,
-    avgOrderValue
-  })
+    res.json({
+      totalOrders,
+      totalRevenue,
+      avgOrderValue
+    })
+  } catch {
+    res.status(500).json({ error: "Dashboard error" })
+  }
 })
 
 
